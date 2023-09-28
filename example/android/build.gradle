@@ -36,5 +36,10 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
+        // IMPORTANT!!! need to add this depenedency on project level (for now)
+        // Adding that on the module itself does not work
+        maven {
+         url "https://github.com/Gainsight/px-android/raw/main/"
+     }
     }
 }

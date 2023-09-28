@@ -1,0 +1,2 @@
+Android:
+Find a way to set private repository on module level and not on app level. (Our SDK is not available on the official repositories, only from GitHub)
