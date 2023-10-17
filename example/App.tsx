@@ -5,14 +5,23 @@ import * as ExpoGainsightPx from 'expo-gainsight-px';
 
 export default function App() {
   const [custom, setCustom] = useState('');
+  const [error, setError] = useState('');
 
   const gainsightFlow = () => {
-    initGainsight();
-    identifyUser();
+    if (initGainsight()){
+      identifyUser();
+    }
   };
 
   const initGainsight = () => {
-    ExpoGainsightPx.startInstance("AP-EFDW8RWAJTAL-3");
+    const config = new ExpoGainsightPx.Configuration("AP-EFDW8RWAJTAL-3");
+    config.host = ExpoGainsightPx.PXHost.eu;
+    const res: ExpoGainsightPx.Callback = ExpoGainsightPx.startInstance(config);
+    if (res.status == ExpoGainsightPx.CallbackStatus.FAILURE && !(res.exceptionMessage == null)) {
+      setError(res.exceptionMessage);
+      return false;
+    }
+    return true;
   };
 
   const identifyUser = () => {
@@ -48,12 +57,12 @@ export default function App() {
           Send Custom
         </Text>
       </TouchableOpacity>
-      <View style={styles.container}>
-        <Text>{ExpoGainsightPx.hello()}</Text>
-      </View>
+      <Text style={styles.ctaButton}>
+        Error: {error}
+      </Text>
     </SafeAreaView>
   );
-  }
+}
 
 const styles = StyleSheet.create({
   container: {
