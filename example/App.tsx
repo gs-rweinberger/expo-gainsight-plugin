@@ -6,6 +6,36 @@ import * as ExpoGainsightPx from 'expo-gainsight-px';
 export default function App() {
   const [custom, setCustom] = useState('');
   const [error, setError] = useState('');
+/*
+  type AsyncBoolean = (...args: any[]) => Promise<ExpoGainsightPx.Response>;
+
+  async function runWithErrorCheck(method: AsyncBoolean): Promise<Boolean> {
+    return new Promise<Boolean>((res,rej) => {
+      method()
+      .then(result => {
+        res(analyzeResponse(result));
+      })
+      .catch(result => {
+        res(analyzeResponse(result));
+      });
+    });
+  }
+
+  const gainsightFlow = async () => {
+    const result = await runWithErrorCheck(init);
+    if (result){
+      identifyUser();
+    }
+  };
+  */
+ 
+  function analyzeResponse(response: ExpoGainsightPx.Response) : Boolean {
+    if (response.status == ExpoGainsightPx.Status.FAILURE && !(response.exceptionMessage == null)) {
+      setError(response.exceptionMessage);
+      return false;
+    }
+    return true;
+  }
 
   const gainsightFlow = () => {
     if (initGainsight()){
@@ -13,24 +43,19 @@ export default function App() {
     }
   };
 
-  const initGainsight = () => {
+  const initGainsight = () =>{
     const config = new ExpoGainsightPx.Configuration("AP-EFDW8RWAJTAL-3");
-    config.host = ExpoGainsightPx.PXHost.eu;
-    const res: ExpoGainsightPx.Callback = ExpoGainsightPx.startInstance(config);
-    if (res.status == ExpoGainsightPx.CallbackStatus.FAILURE && !(res.exceptionMessage == null)) {
-      setError(res.exceptionMessage);
-      return false;
-    }
-    return true;
+    return analyzeResponse(ExpoGainsightPx.startInstance(config));
   };
 
   const identifyUser = () => {
-    ExpoGainsightPx.identify("expo-user");
+    return analyzeResponse(ExpoGainsightPx.identifyWithUserName("expo-user"));
   };
 
   const customEvent = () => {
-    ExpoGainsightPx.custom(custom);
-    setCustom("");
+    if (analyzeResponse(ExpoGainsightPx.custom(custom))){
+      setCustom("");
+    }
   }
 
   return (
