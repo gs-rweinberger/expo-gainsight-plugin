@@ -1,11 +1,37 @@
 import { SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as Linking from 'expo-linking'
 
 import * as ExpoGainsightPx from 'expo-gainsight-px';
+
+const prefix = Linking.createURL('/');
 
 export default function App() {
   const [custom, setCustom] = useState('');
   const [error, setError] = useState('');
+  const [exception, setException] = useState('');
+
+  const url = Linking.useURL();
+
+  useEffect(() => {
+    const subExcetion = ExpoGainsightPx.addExceptionListener((info) => {
+      setException(`${info.method} - exception: ${info.message}\nargs: ${JSON.stringify(info.params)}`);
+    });
+
+    const subEngagement = ExpoGainsightPx.addEngagementsListener((info) => {
+      setException(`Engagement Info:\n${JSON.stringify(info)}`);
+    });
+
+    if (url) {
+      setException(`opened with url:\n${url}`)
+    }
+
+    return () => {
+      subExcetion.remove();
+      subEngagement.remove();
+    }
+  }, []);
+
 /*
   type AsyncBoolean = (...args: any[]) => Promise<ExpoGainsightPx.Response>;
 
@@ -28,10 +54,10 @@ export default function App() {
     }
   };
   */
- 
+
   function analyzeResponse(response: ExpoGainsightPx.Response) : Boolean {
     if (response.status == ExpoGainsightPx.Status.FAILURE && !(response.exceptionMessage == null)) {
-      setError(response.exceptionMessage);
+      setError(response.methodName + ": " +response.exceptionMessage);
       return false;
     }
     return true;
@@ -44,16 +70,91 @@ export default function App() {
   };
 
   const initGainsight = () =>{
-    const config = new ExpoGainsightPx.Configuration("AP-EFDW8RWAJTAL-3");
+    const config: ExpoGainsightPx.Configuration = {apiKey: "AP-EFDW8RWAJTAL-3"};
+    config.enableLogs = true;
     return analyzeResponse(ExpoGainsightPx.startInstance(config));
   };
 
   const identifyUser = () => {
-    return analyzeResponse(ExpoGainsightPx.identifyWithUserName("expo-user"));
+    const user: ExpoGainsightPx.User = {id: "expo_reuven"};
+    user.userHash = "abc";
+    user.email = "reuven@expo.try";
+    user.lastName = "Weinberger";
+    user.firstName = "Reuven";
+    user.title = "Mr.";
+    user.role = "Developer";
+    user.subscriptionId = "subId";
+    user.phone = "+972505050505";
+    user.organization = "Gainsight";
+    user.organizationEmployees = "2000";
+    user.organizationRevenue = "2M";
+    user.organizationIndustry = "Software";
+    user.score = 123.45;
+    user.customAttributes = {
+      hello: "work",
+      bool: true,
+      int:123,
+      doub:123.42
+    };
+    user.signUpDate = new Date().toISOString();
+    user.gender = ExpoGainsightPx.Gender.MALE;
+    user.firstVisitDate = new Date().getTime();
+    user.countryCode = "IL";
+    user.countryName = "USA";
+    user.stateCode = "51";
+    user.stateName = "Test";
+    user.city = "Reho";
+    user.street = "There";
+    user.continent = "Europe";
+    user.postalCode = "1234567";
+    user.regionName = "ME";
+    user.timeZone = "EST";
+    user.latitude = 34.2135;
+    user.longitude = 36.123;
+    user.sfdcContactId = "sfdc";
+    user.organizationSicCode = 123.245;
+    user.organizationDuns = 12312545.34;
+
+    const account: ExpoGainsightPx.Account= {id: "def1"};
+    account.countryCode = "IT";
+    account.countryName = "Temp";
+    account.stateCode = "IL";
+    account.stateName = "Illinoy";
+    account.city = "TestCity";
+    account.street = "Test Street";
+    account.continent = "Cont";
+    account.postalCode = "9876543";
+    account.regionName = "EM";
+    account.timeZone = "GMT";
+    account.latitude = 34.1234;
+    account.longitude = 36.4321;
+
+    account.name = "Gainsight TLD";
+    account.trackedSubscriptionId = "1a2b3c4d";
+    account.industry = "Analytics";
+    account.numberOfEmployees = 1600;
+    account.sicCode = 234.123;
+    account.website = "http://Gainsight.com/";
+    account.naicsCode = "1a2c3b4e";
+    account.plan = "Gold";
+    account.sfdcId = "12345";
+    account.customAttributes = {
+      hello: "work",
+      acc_attr_boolean: true,
+      acc_attr_number:123.42
+    };
+
+    return analyzeResponse(ExpoGainsightPx.identify(user, account));
   };
 
   const customEvent = () => {
-    if (analyzeResponse(ExpoGainsightPx.custom(custom))){
+    let properties = {
+      att_str: "name",
+      att_int: 123456,
+      att_double: 456.123,
+      att_bool: true
+    };
+    if (analyzeResponse(ExpoGainsightPx.custom(custom, properties))){
       setCustom("");
     }
   }
@@ -82,8 +183,12 @@ export default function App() {
           Send Custom
         </Text>
       </TouchableOpacity>
-      <Text style={styles.ctaButton}>
+      <Text style={styles.error}>
         Error: {error}
+      </Text>
+      <Text style={styles.exception}>
+        {exception}
+        {}
       </Text>
     </SafeAreaView>
   );
@@ -93,8 +198,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    paddingVertical: 16,
   },
   ctaButton: {
     height: 60,
@@ -102,6 +208,26 @@ const styles = StyleSheet.create({
     backgroundColor: "purple",
     justifyContent: "center",
     alignItems: "center",
+    marginHorizontal: 25,
+    marginBottom: 10,
+  },
+  error: {
+    borderRadius: 8,
+    backgroundColor: "#efe8e0",
+    color: '#0f0f0f',
+    justifyContent: "center",
+    alignItems: "center",
+    padding:10,
+    marginHorizontal: 25,
+    marginBottom: 10,
+  },
+  exception: {
+    borderRadius: 8,
+    backgroundColor: "#f0f0f0",
+    color: '#0f0f0f',
+    justifyContent: "center",
+    alignItems: "center",
+    padding:10,
     marginHorizontal: 25,
     marginBottom: 10,
   },

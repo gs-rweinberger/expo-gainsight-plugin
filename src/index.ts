@@ -1,3 +1,4 @@
+import { EventEmitter, Subscription } from 'expo-modules-core';
 import ExpoGainsightPxModule from './ExpoGainsightPxModule';
 
 export const enum Status {
@@ -18,139 +19,214 @@ export enum PXHost {
   us2 = "us2"
 }
 
-export class Configuration {
-  private apiKey: string;
-  public flushQueueSize?: number;
-  public maxQueueSize?: number;
-  public flushIntervalInSeconds?: number;
-  public enableLogs?: boolean;
-  public trackApplicationLifeCycleEvents?: boolean;
-  public shouldTrackTapEvents?: boolean;
-  public enable?: boolean;
-  public proxy?: string;
-  public host?: PXHost;
-  public reportTrackingIssues?: boolean;
-
-  public androidIsTrackTapInAllLayouts?: boolean;
-  public androidCollectDeviceId?: boolean;
-
-  // TODO: need to add crypto and connectionSettings
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-  }
-
-  public toJson() {
-    const json = JSON.stringify(this);
-    return JSON.parse(json);
-  }
+export type Configuration = {
+  apiKey: string,
+  flushQueueSize?: number,
+  maxQueueSize?: number,
+  flushIntervalInSeconds?: number,
+  enableLogs?: boolean,
+  trackApplicationLifeCycleEvents?: boolean,
+  shouldTrackTapEvents?: boolean,
+  enable?: boolean,
+  proxy?: string,
+  host?: PXHost,
+  reportTrackingIssues?: boolean,
+  
+  androidIsTrackTapInAllLayouts?: boolean,
+  androidCollectDeviceId?: boolean
 }
 
 export interface JsonList extends Array<JsonValue> {}
 
-export type JsonValue = boolean | number | string | null | JsonList | JsonMap;
+export type GlobalContextValue = boolean | number | string;
 
-export interface JsonMap {
-  [key: string]: JsonValue;
+export type JsonValue = boolean | number | string | null | JsonList;
 
-  [index: number]: JsonValue;
+export type SupportedDates = number | string | null | undefined;
+
+export type JsonMap = {
+  [key: string]: JsonValue
 }
 
-export class Geodetails {
-  public countryCode?: string;
-  public countryName?: string;
-  public stateCode?: string;
-  public stateName?: string;
-  public city?: string;
-  public street?: string;
-  public continent?: string;
-  public postalCode?: string;
-  public regionName?: string;
-  public timeZone?: string;
-  public latitude?: number;
-  public longitude?: number;
-
-  public toJson() {
-    const jstring = JSON.stringify(this);
-    return JSON.parse(jstring);
-  }
+export enum Gender {
+  NOT_SET = "Not Set", 
+  MALE = "Male", 
+  FEMALE = "Female",
+  OTHER = "Other"
 }
 
-export class User extends Geodetails {
-  public email?: string;
-  public usem?: string;
-  public userHash?: string;
-  public gender?: string;
-  public lastName?: string;
-  public firstName?: string;
-  public signUpDate?: Date;
-  public title?: string;
-  public role?: string;
-  public subscriptionId?: string;
-  public phone?: string;
-  public organization?: string;
-  public organizationEmployees?: string;
-  public organizationRevenue?: string;
-  public organizationIndustry?: string;
-  public organizationSicCode?: string;
-  public organizationDuns?: number;
-  public accountId?: string;
-  public firstVisitDate?: Date;
-  public score?: number;
-  public sfdcContactId?: string;
-  public customAttributes?: JsonMap;
-
-  private ide: string;
-
-  constructor(userId: string) {
-    super();
-    this.ide = userId;
-  }
-
-  public toJson() {
-    const jstring = JSON.stringify(this);
-    return JSON.parse(jstring);
-  }
+export type User = {
+  id: string,
+  email?: string,
+  userHash?: string,
+  gender?: Gender,
+  lastName?: string,
+  firstName?: string,
+  signUpDate?: SupportedDates,
+  title?: string,
+  role?: string,
+  subscriptionId?: string,
+  phone?: string,
+  organization?: string,
+  organizationEmployees?: string,
+  organizationRevenue?: string,
+  organizationIndustry?: string,
+  /**
+   * Should be Integer
+   */
+  organizationSicCode?: number,
+  /** 
+   * should be long 
+   */
+  organizationDuns?: number,
+  accountId?: string,
+  firstVisitDate?: SupportedDates,
+  score?: number,
+  sfdcContactId?: string,
+  countryCode?: string,
+  countryName?: string,
+  stateCode?: string,
+  stateName?: string,
+  city?: string,
+  street?: string,
+  continent?: string,
+  postalCode?: string,
+  regionName?: string,
+  timeZone?: string,
+  latitude?: number,
+  longitude?: number,
+  customAttributes?: JsonMap
 }
 
-export class Account extends Geodetails {
-  public id: string;
-  public name?: string;
-  public trackedSubscriptionId?: string;
-  public industry?: string;
-  public numberOfEmployees?: number;
-  public sicCode?: string;
-  public website?: string;
-  public naicsCode?: string;
-  public plan?: string;
-  public sfdcId?: string;
-  public customAttributes?: JsonMap;
-
-  constructor(id: string) {
-    super();
-    this.id = id;
-  }
-
-  public toJson() {
-    const jstring = JSON.stringify(this);
-    return JSON.parse(jstring);
-  }
+export type Account = {
+  id: string,
+  name?: string,
+  trackedSubscriptionId?: string,
+  industry?: string,
+  numberOfEmployees?: number,
+  /**
+   * Should be Integer
+   */
+  sicCode?: number,
+  website?: string,
+  naicsCode?: string,
+  plan?: string,
+  sfdcId?: string,
+  countryCode?: string,
+  countryName?: string,
+  stateCode?: string,
+  stateName?: string,
+  city?: string,
+  street?: string,
+  continent?: string,
+  postalCode?: string,
+  regionName?: string,
+  timeZone?: string,
+  latitude?: number,
+  longitude?: number,
+  customAttributes?: JsonMap
 }
+
+const emitter = new EventEmitter(ExpoGainsightPxModule);
+
+export type EngagementInfo = {
+  engagementId: String;
+  engagementName?: String;
+  screenName?: String;
+  screenClass?: String;
+  actionText?: String;
+  actionData?: String;
+  actionType?: String;
+  params?: JsonMap;
+};
+
+export type ExceptionInfo = {
+  method: String;
+  params?: JsonMap;
+  message?: String;
+};
 
 export function startInstance(configuration: Configuration): Response {
   return ExpoGainsightPxModule.startInstance(configuration);
 }
 
+export function isEnabled(): boolean {
+  return ExpoGainsightPxModule.enabled;
+}
+
+export function setEnabled(value: boolean) {
+  ExpoGainsightPxModule.enabled = value;
+}
+
+export function isEngagementsEnable(): boolean {
+  return ExpoGainsightPxModule.engagementEnable;
+}
+
+export function setEngagementsEnable(value: boolean) {
+  ExpoGainsightPxModule.engagementEnable = value;
+}
+
 export function identifyWithUserName(userId: string): Response  {
-  return identify(new User(userId));
+  return identify({id: userId});
 }
 
 export function identify(user: User, account?: Account): Response  {
   return ExpoGainsightPxModule.identify(user, account);
 }
 
-export function custom(eventName: string) {
-  return ExpoGainsightPxModule.custom(eventName);
+export function unidentify(): Response {
+  return ExpoGainsightPxModule.unidentify();
 }
+
+export function custom(eventName: string, properties?: JsonMap): Response {
+  return ExpoGainsightPxModule.custom(eventName, properties);
+}
+
+export function screen(screenName: string, screenClass?: string, properties?: JsonMap): Response {
+  return ExpoGainsightPxModule.screen(screenName, screenClass, properties);
+}
+
+export function addGlobalContext(key: string, value: GlobalContextValue): Response {
+  return ExpoGainsightPxModule.addGlobalContext(key, value);
+}
+
+export function hasGlobalContextKey(key: string): Boolean {
+  return ExpoGainsightPxModule.hasGlobalContextKey(key);
+}
+
+export function removeGlobalContext(key: string): Response {
+  return ExpoGainsightPxModule.removeGlobalContext(key);
+}
+
+export function flush(): Response{
+  return ExpoGainsightPxModule.flush();
+}
+
+export function hardReset(): Response {
+  return ExpoGainsightPxModule.hardReset();
+}
+
+export function addEngagementsListener(
+  listener: (event: EngagementInfo) => void
+): Subscription {
+  return emitter.addListener<EngagementInfo>("onEngagementEvent", listener);
+}
+
+export function addExceptionListener(
+  listener: (exception: ExceptionInfo) => void
+): Subscription {
+  return emitter.addListener<ExceptionInfo>("onExceptionThrown", listener)
+}
+
+export function enterEditing(deepLink: string): Response {
+  return ExpoGainsightPxModule.enterEditing(deepLink);
+}
+
+export function exitEditing(): Response {
+  return ExpoGainsightPxModule.exitEditing();
+}
+
+
 /*
 type CallBackFn = (...args: any[]) => Promise<Response>;
 

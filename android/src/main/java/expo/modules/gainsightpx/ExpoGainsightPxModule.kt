@@ -1,8 +1,16 @@
 package expo.modules.gainsightpx
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.util.Log
+import androidx.core.os.bundleOf
+import com.gainsight.px.mobile.EngagementMetaData
 import com.gainsight.px.mobile.GainsightPX
 import com.gainsight.px.mobile.LogLevel
+import com.gainsight.px.mobile.ScreenEventData
+import com.gainsight.px.mobile.ValueMap
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
@@ -62,9 +70,9 @@ data class Configuration(
     @Field
     val androidCollectDeviceId: Boolean? = null
 ) : Record {
-    fun toNativeConfiguration(applicationContext: Context?): GainsightPX.Builder {
+    fun toNativeConfiguration(applicationContext: Context?, exceptionHandler: GainsightPX.ExceptionHandler): GainsightPX.Builder {
         val configBuilder = GainsightPX
-            .Builder(applicationContext, this.apiKey)
+            .Builder(applicationContext, this.apiKey, exceptionHandler)
         this.flushQueueSize?.let { value ->
             configBuilder.flushQueueSize(value)
         }
@@ -106,17 +114,23 @@ data class Configuration(
     }
 }
 
+@Suppress("unused")
+enum class Gender(val value: String): Enumerable {
+    NOT_SET("Not Set"),
+    MALE("Male"),
+    FEMALE("Female"),
+    OTHER("Other")
+}
+
 data class User(
     @Field
-    val ide: String,
+    val id: String,
     @Field
     val email: String?,
-    @Suppress("SpellCheckingInspection") @Field
-    val usem: String?,
     @Field
     val userHash: String?,
     @Field
-    val gender: String?,
+    val gender: Gender?,
     @Field
     val lastName: String?,
     @Field
@@ -140,7 +154,7 @@ data class User(
     @Field
     val organizationIndustry: String?,
     @Field
-    val organizationSicCode: String?,
+    val organizationSicCode: Int?,
     @Field
     val organizationDuns: Long?,
     @Field
@@ -179,18 +193,20 @@ data class User(
     val longitude: Double?
 ) : Record {
         fun toNativeUser() : com.gainsight.px.mobile.User {
-            val gainsightUser = com.gainsight.px.mobile.User(this.ide)
+            val gainsightUser = com.gainsight.px.mobile.User(this.id)
             this.email?.let { email ->
-                gainsightUser.putEmail(email)
-            }
-            this.usem?.let { email ->
                 gainsightUser.putEmail(email)
             }
             this.userHash?.let { hash ->
                 gainsightUser.putIdentifyIdHash(hash)
             }
             this.gender?.let { gender ->
-                gainsightUser.putGender(com.gainsight.px.mobile.User.Gender.getGender(gender.uppercase()))
+                when (gender) {
+                    Gender.NOT_SET -> gainsightUser.putGender(com.gainsight.px.mobile.User.Gender.NOT_SET)
+                    Gender.MALE -> gainsightUser.putGender(com.gainsight.px.mobile.User.Gender.MALE)
+                    Gender.FEMALE -> gainsightUser.putGender(com.gainsight.px.mobile.User.Gender.FEMALE)
+                    Gender.OTHER -> gainsightUser.putGender(com.gainsight.px.mobile.User.Gender.OTHER)
+                }
             }
             this.lastName?.let { lastName ->
                 gainsightUser.putLastName(lastName)
@@ -232,7 +248,7 @@ data class User(
                 gainsightUser.putOrganizationIndustry(organizationIndustry)
             }
             this.organizationSicCode?.let { organizationSicCode ->
-                gainsightUser.putOrganizationSicCode(organizationSicCode)
+                gainsightUser.putOrganizationSicCode(organizationSicCode.toString())
             }
             this.organizationDuns?.let { organizationDuns ->
                 gainsightUser.putOrganizationDuns(organizationDuns)
@@ -314,7 +330,7 @@ data class Account(
     @Field
     val numberOfEmployees: Any?,
     @Field
-    val sicCode: String?,
+    val sicCode: Int?,
     @Field
     val website: String?,
     @Suppress("SpellCheckingInspection", "SpellCheckingInspection") @Field
@@ -370,7 +386,7 @@ data class Account(
             }
         }
         this.sicCode?.let { sicCode ->
-            gainsightAccount.putSicCode(sicCode)
+            gainsightAccount.putSicCode(sicCode.toString())
         }
         this.website?.let { website ->
             gainsightAccount.putWebsite(website)
@@ -427,16 +443,90 @@ data class Account(
     }
 }
 
+const val kOnEngagementEvent = "onEngagementEvent"
+const val kOnExceptionThrown = "onExceptionThrown"
+
+class EngagementsListener(val cb: (name: String, body: Bundle?) -> Unit): GainsightPX.EngagementCallback {
+    override fun onCallback(metaData: EngagementMetaData?): Boolean {
+        metaData?.let {
+            this.cb(kOnEngagementEvent, bundleOf("engagementId" to metaData.engagementId,
+                "engagementName" to metaData.engagementName,
+                "screenName" to metaData.scope?.screenName(),
+                "screenClass" to metaData.scope?.screenClass(),
+                "actionText" to metaData.actionText,
+                "actionData" to metaData.actionData,
+                "actionType" to metaData.actionType,
+                "params" to metaData.params)
+            )
+            return true
+        }
+        return false
+    }
+}
+
 class ExpoGainsightPxModule : Module() {
+
+    private val engagementListener: EngagementsListener = EngagementsListener(::sendEvent)
+    private var engagementEnabled: Boolean = false
+
     override fun definition() = ModuleDefinition {
         Name("ExpoGainsightPx")
 
+        Events(kOnEngagementEvent, kOnExceptionThrown)
+
+        Property("enabled")
+            .get {
+                return@get GainsightPX.with().enabled()
+            }
+            .set { newValue: Boolean ->
+                GainsightPX.with().setEnable(newValue)
+            }
+
+        Property("engagementEnable")
+            .get {
+                return@get engagementEnabled
+            }
+            .set { newValue: Boolean ->
+                GainsightPX.with().enableEngagements(newValue)
+                engagementEnabled = newValue
+            }
+
+        fun Map<String, Any>.toBundle(): Bundle {
+            val args = Bundle()
+            this.let { map ->
+                if (map.isNotEmpty()) {
+                    map.forEach { (key, value) ->
+                        when (value) {
+                            is Int -> args.putInt(key, value)
+                            is Long -> args.putLong(key, value)
+                            is ValueMap -> args.putBundle(key, value.toBundle())
+                            is String -> args.putString(key, value)
+                            is Exception -> args.putString(key, value.message)
+                            else -> Log.i("PXExpo","Need conversion: ${value.javaClass.name}")
+                        }
+                    }
+                }
+            }
+            return args
+        }
+
+        val reportError = { method: String?, params: ValueMap?, message: String? ->
+            Log.i("PXExpo", "$method-Error: message- $message, params- $params")
+            val args = params?.toBundle()
+            sendEvent(kOnExceptionThrown, bundleOf(
+                "method" to method,
+                "params" to args,
+                "message" to message))
+        }
+
         Function("startInstance") { configuration: Configuration ->
             try {
-                val configBuilder = configuration.toNativeConfiguration(appContext.reactContext?.applicationContext)
-                GainsightPX.setSingletonInstance(configBuilder.build())
+                val configBuilder = configuration.toNativeConfiguration(appContext.reactContext?.applicationContext, reportError)
+                configBuilder.engagementCallback(engagementListener)
+                val instance = configBuilder.build()
+                GainsightPX.setSingletonInstance(instance)
                 configuration.enable?.let { value ->
-                    GainsightPX.with().setEnable(value)
+                    instance.setEnable(value)
                 }
                 return@Function responseSuccess("startInstance", configuration)
             } catch (ex: Throwable) {
@@ -448,15 +538,101 @@ class ExpoGainsightPxModule : Module() {
             try {
                 val gainsightAccount = account?.toNativeAccount()
                 val gainsightUser = user.toNativeUser()
-                GainsightPX.with().identify(gainsightUser, gainsightAccount)
+                GainsightPX.with().identify(gainsightUser, gainsightAccount, reportError)
                 return@Function responseSuccess("identify", mapOf("user" to user, "account" to account))
             } catch (ex: Throwable) {
                 return@Function responseFailure("identify", mapOf("user" to user, "account" to account), ex.message)
             }
         }
 
-        Function("custom") { eventName: String ->
-            GainsightPX.with().custom(eventName)
+        Function("unidentify") {
+            GainsightPX.with().reset()
+            return@Function responseSuccess("unidentify", null)
+        }
+
+        Function("custom") { eventName: String, properties: Map<String, Any>? ->
+            try {
+                GainsightPX.with().custom(eventName, properties, reportError)
+                return@Function responseSuccess("custom", mapOf("eventName" to eventName, "properties" to properties))
+            } catch (ex: Throwable) {
+                return@Function responseFailure("custom", mapOf("eventName" to eventName, "properties" to properties), ex.message)
+            }
+        }
+
+        Function("screen") { screenName: String, screenClass: String?, properties: Map<String, Any>? ->
+            try {
+                val screenData = ScreenEventData(screenName)
+                screenClass?.let { screenData.putScreenClass(it) }
+                properties?.let { screenData.putProperties(it) }
+                GainsightPX.with().screen(screenData, reportError)
+                return@Function responseSuccess("screen", mapOf("screenName" to screenName, "screenClass" to screenClass, "properties" to properties))
+            } catch (ex: Throwable) {
+                return@Function responseFailure("screen", mapOf("screenName" to screenName, "screenClass" to screenClass, "properties" to properties), ex.message)
+            }
+        }
+
+        Function("addGlobalContext") { key: String, value: Any ->
+            try {
+                GainsightPX.with().globalContext[key] = value
+                return@Function responseSuccess("addGlobalContext", mapOf("key" to key, "value" to value))
+            } catch (ex: Throwable) {
+                return@Function responseFailure("addGlobalContext", mapOf("key" to key, "value" to value), ex.message)
+            }
+        }
+
+        Function("hasGlobalContextKey") { key: String ->
+            try {
+                return@Function GainsightPX.with().globalContext?.hasKey(key) ?: false
+            } catch (ex: Throwable) {
+                return@Function false
+            }
+        }
+
+        Function("removeGlobalContext") { key: String ->
+            try {
+                GainsightPX.with().globalContext?.removeKey(key)
+                return@Function responseSuccess("removeGlobalContext", mapOf("key" to key))
+            } catch (ex: Throwable) {
+                return@Function responseFailure("removeGlobalContext", mapOf("key" to key), ex.message)
+            }
+        }
+
+        Function("flush") {
+            GainsightPX.with().flush()
+            return@Function responseSuccess("flush", null)
+        }
+
+        Function("hardReset") {
+            try {
+                GainsightPX.with().shutdown()
+                return@Function responseSuccess("hardReset", null)
+            } catch (ex: Throwable) {
+                return@Function responseFailure("hardReset", null, ex.message)
+            }
+        }
+
+        Function("enterEditing") { deepLink: String? ->
+            try {
+                deepLink?.let {
+                    val uri = Uri.parse(deepLink)
+                    val intent = Intent()
+                    intent.data = uri
+                    GainsightPX.with().enterEditingMode(intent)
+                }
+                return@Function responseSuccess("enterEditing", mapOf("deepLink" to deepLink))
+            } catch (ex: Throwable) {
+                return@Function responseFailure("enterEditing", mapOf("deepLink" to deepLink), ex.message)
+
+            }
+        }
+
+        Function("exitEditing") {
+            try {
+                GainsightPX.with().exitEditingMode()
+                return@Function responseSuccess("exitEditing", null)
+            } catch (ex: Throwable) {
+                return@Function responseFailure("exitEditing", null, ex.message)
+            }
         }
     }
 
@@ -477,3 +653,42 @@ class ExpoGainsightPxModule : Module() {
         )
     }
 }
+
+/*
+type CallBackFn = (...args: any[]) => Promise<Response>;
+
+async function runAsync(runnable: CallBackFn): Promise<Response> {
+  return new Promise<Response>((resolve, reject) => {
+    try {
+    runnable().then(result => {
+      if (result.status == Status.SUCCESS) {
+        resolve(result);
+      } else {
+        reject(result);
+      }
+    }).catch(error => {
+      const result: Response = {
+        status: Status.FAILURE,
+        methodName: error.userInfo.methodName,
+        params: error.userInfo.params,
+        exceptionMessage: error.message
+      };
+      reject(result);
+      });
+  } catch (error) {
+    const result: Response = {
+      status: Status.FAILURE,
+      methodName: error.userInfo.methodName,
+      params: error.userInfo.params,
+      exceptionMessage: error.message
+    };
+    reject(result);
+  }});
+}
+
+export async function startInstance(configuration: Configuration): Promise<Response> {
+  return runAsync(() =>{
+    return ExpoGainsightPxModule.startInstance(configuration);
+  });
+}
+*/
