@@ -1,17 +1,15 @@
 import { SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useEffect, useState } from 'react';
-import * as Linking from 'expo-linking'
 
 import * as ExpoGainsightPx from 'expo-gainsight-px';
 
-const prefix = Linking.createURL('/');
 
 export default function App() {
   const [custom, setCustom] = useState('');
+  const [deeplink, setDeepLink] = useState('');
   const [error, setError] = useState('');
   const [exception, setException] = useState('');
 
-  const url = Linking.useURL();
 
   useEffect(() => {
     const subExcetion = ExpoGainsightPx.addExceptionListener((info) => {
@@ -21,10 +19,6 @@ export default function App() {
     const subEngagement = ExpoGainsightPx.addEngagementsListener((info) => {
       setException(`Engagement Info:\n${JSON.stringify(info)}`);
     });
-
-    if (url) {
-      setException(`opened with url:\n${url}`)
-    }
 
     return () => {
       subExcetion.remove();
@@ -72,6 +66,7 @@ export default function App() {
   const initGainsight = () =>{
     const config: ExpoGainsightPx.Configuration = {apiKey: "AP-EFDW8RWAJTAL-3"};
     config.enableLogs = true;
+    config.shouldTrackTapEvents = true;
     return analyzeResponse(ExpoGainsightPx.startInstance(config));
   };
 
@@ -159,8 +154,25 @@ export default function App() {
     }
   }
 
+  const openEditor = () => {
+    if (analyzeResponse(ExpoGainsightPx.enterEditing(deeplink))){
+      setDeepLink("");
+    }
+  }
+
+  const closeEditor = () => {
+    analyzeResponse(ExpoGainsightPx.exitEditing());
+  }
+
   return (
     <SafeAreaView style={styles.container}>
+      <Text style={styles.exception}>
+        {exception}
+      </Text>
+      <Text style={styles.error}>
+        {error}
+      </Text>
+      <View style={styles.spacer}/>
       <TouchableOpacity
         style={styles.ctaButton}
         onPress={gainsightFlow}
@@ -183,13 +195,29 @@ export default function App() {
           Send Custom
         </Text>
       </TouchableOpacity>
-      <Text style={styles.error}>
-        Error: {error}
-      </Text>
-      <Text style={styles.exception}>
-        {exception}
-        {}
-      </Text>
+      <View style={styles.spacer}/>
+      <TextInput
+        value={deeplink}
+        onChangeText={(link) => setDeepLink(link)}
+        placeholder={'Editor URL'}
+        style={styles.input}
+      />
+      <TouchableOpacity
+        style={styles.ctaButton}
+        onPress={openEditor}
+        >
+        <Text style={styles.ctaButtonText}>
+          Open Editor
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.ctaButton}
+        onPress={closeEditor}
+        >
+        <Text style={styles.ctaButtonText}>
+          Close Editor
+        </Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -200,15 +228,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'stretch',
     justifyContent: 'flex-start',
-    paddingVertical: 16,
+    marginVertical: 16,
+    marginHorizontal: 25,
   },
   ctaButton: {
-    height: 60,
     borderRadius: 8,
     backgroundColor: "purple",
     justifyContent: "center",
     alignItems: "center",
-    marginHorizontal: 25,
+    padding: 10,
     marginBottom: 10,
   },
   error: {
@@ -217,9 +245,8 @@ const styles = StyleSheet.create({
     color: '#0f0f0f',
     justifyContent: "center",
     alignItems: "center",
-    padding:10,
-    marginHorizontal: 25,
     marginBottom: 10,
+    padding:10,
   },
   exception: {
     borderRadius: 8,
@@ -228,7 +255,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding:10,
-    marginHorizontal: 25,
     marginBottom: 10,
   },
   ctaButtonText: {
@@ -237,11 +263,13 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   input: {
-    width: 250,
     height: 44,
     padding: 10,
-    marginTop: 20,
-    marginBottom: 10,
+    borderRadius: 8,
+    marginBottom: 10,    
     backgroundColor: '#e8e8e8'
+  },
+  spacer: {
+    height: 16,
   },
 });

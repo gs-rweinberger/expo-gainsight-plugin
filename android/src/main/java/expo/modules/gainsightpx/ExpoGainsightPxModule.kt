@@ -521,7 +521,8 @@ class ExpoGainsightPxModule : Module() {
 
         Function("startInstance") { configuration: Configuration ->
             try {
-                val configBuilder = configuration.toNativeConfiguration(appContext.reactContext?.applicationContext, reportError)
+                val context = appContext.currentActivity ?: appContext.reactContext?.applicationContext
+                val configBuilder = configuration.toNativeConfiguration(context, reportError)
                 configBuilder.engagementCallback(engagementListener)
                 val instance = configBuilder.build()
                 GainsightPX.setSingletonInstance(instance)
